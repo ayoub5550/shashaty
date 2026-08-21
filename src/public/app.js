@@ -37,6 +37,96 @@ function toggleEp(tvId, s, e) {
 }
 const isWatched = (tvId, s, e) => (getWatched()[`${tvId}`] || []).includes(`${s}x${e}`);
 
+
+/* ---------- icons ---------- */
+const ICON = {
+  play: '<svg viewBox="0 0 24 24"><path d="M7 4.5v15l13-7.5z" fill="currentColor" stroke="none"/></svg>',
+  check: '<svg viewBox="0 0 24 24"><path d="M4 12.5l5 5L20 6.5"/></svg>',
+  book: '<svg viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4.5L6 21z"/></svg>',
+  free: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 9h6M9 12h4M11 9v7"/></svg>',
+  star: '<svg viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 9.7l5.9-.8z" fill="currentColor" stroke="none"/></svg>'
+};
+
+/* ---------- in-app player ---------- */
+const playerEl = document.getElementById('player');
+const pbody = document.getElementById('pbody');
+const ptitle = document.getElementById('ptitle');
+document.getElementById('pclose').onclick = closePlayer;
+function openPlayer(title, html) {
+  ptitle.textContent = title;
+  pbody.innerHTML = html;
+  playerEl.hidden = false;
+  document.body.style.overflow = 'hidden';
+}
+function closePlayer() {
+  playerEl.hidden = true;
+  pbody.innerHTML = '';
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !playerEl.hidden) closePlayer(); });
+
+function playTrailer(d) {
+  if (!d.trailer) return false;
+  openPlayer('الإعلان · ' + d.title,
+    `<iframe src="https://www.youtube.com/embed/${d.trailer.key}?rel=0&autoplay=1&hl=ar" allowfullscreen allow="autoplay;encrypted-media;picture-in-picture"></iframe>`);
+  return true;
+}
+function playFile(title, url, type) {
+  openPlayer(title, `<video controls autoplay playsinline preload="metadata"><source src="${url}" type="${type || 'video/mp4'}"></video>`);
+}
+async function startWatch(d, type) {
+  openPlayer(d.title, '<div class="loader"><div></div></div>');
+  let free = null;
+  if (type === 'movie') {
+    try {
+      free = await api(`/api/watch?title=${encodeURIComponent(d.original_title || d.title)}&year=${(d.date || '').slice(0, 4)}`);
+    } catch (e) { free = null; }
+  }
+  if (free && free.url) return playFile(d.title + ' (نسخة مجانية · Archive.org)', free.url, free.type);
+  if (playTrailer(d)) return;
+  closePlayer();
+  alert('ما لقيناش نسخة مجانية قانونية ولا إعلان لهذا العمل.');
+}
+async function loadFreeBadge(d) {
+  const box = document.getElementById('trbox');
+  if (!box) return;
+  if (d.type === 'movie') {
+    try {
+      const free = await api(`/api/watch?title=${encodeURIComponent(d.original_title || d.title)}&year=${(d.date || '').slice(0, 4)}`);
+      if (free && free.url) {
+        box.innerHTML = `<div class="freebar">${ICON.free} متوفّر مجانًا وقانونيًا (ملكية عامة · Archive.org) — اضغط «مشاهدة»</div>`;
+        return;
+      }
+    } catch (e) { /* ignore */ }
+  }
+  box.innerHTML = d.trailer ? `<div class="freebar" style="color:var(--mut)">${ICON.play} زر «مشاهدة» يشغّل الإعلان الرسمي داخل التطبيق</div>` : '';
+}
+
+/* ---------- free (public domain) library ---------- */
+async function pageFree(page) {
+  page = Number(page || 1);
+  view.innerHTML = `<h2 class="sec">أفلام مجانية بالكامل</h2>
+    <div class="freebar">${ICON.free} كلاسيكيات بالملكية العامة — مشاهدة كاملة وقانونية داخل التطبيق</div>${loader()}`;
+  const d = await api('/api/free?page=' + page);
+  view.innerHTML = `<h2 class="sec">أفلام مجانية بالكامل</h2>
+    <div class="freebar">${ICON.free} كلاسيكيات بالملكية العامة — مشاهدة كاملة وقانونية داخل التطبيق</div>
+    <div class="grid">${d.items.map((f) => `<a class="poster" data-free="${esc(f.id)}" data-t="${esc(f.title)}">
+      <div class="ph"><img loading="lazy" src="${esc(f.thumb)}" alt=""><div class="tag">مجاني</div></div>
+      <div class="t">${esc(f.title)}</div><div class="y">${esc(f.year || '')}</div></a>`).join('')}</div>
+    <div class="acts" style="justify-content:center">
+      ${page > 1 ? '<button class="btn ghost" id="fprev">السابق</button>' : ''}
+      <button class="btn" id="fnext">التالي</button></div>${attribution}`;
+  view.querySelectorAll('[data-free]').forEach((a) => a.onclick = async () => {
+    openPlayer(a.dataset.t, '<div class="loader"><div></div></div>');
+    const s = await api('/api/free/stream?id=' + encodeURIComponent(a.dataset.free));
+    if (s && s.url) playFile(a.dataset.t, s.url, s.type);
+    else { closePlayer(); alert('هذا العنصر غير قابل للتشغيل.'); }
+  });
+  const nx = document.getElementById('fnext'), pv = document.getElementById('fprev');
+  if (nx) nx.onclick = () => { location.hash = '#/free/' + (page + 1); };
+  if (pv) pv.onclick = () => { location.hash = '#/free/' + (page - 1); };
+}
+
 /* ---------- components ---------- */
 function posterCard(c) {
   const badge = c.rating ? `<div class="badge">★ ${c.rating}</div>` : '';
@@ -65,6 +155,7 @@ async function pageHome() {
   const dots = view.querySelectorAll('.dots i');
   let idx = 0;
   clearInterval(heroTimer);
+  closePlayer();
   if (sl.length > 1) heroTimer = setInterval(() => {
     sl[idx].classList.remove('on'); dots[idx].classList.remove('on');
     idx = (idx + 1) % sl.length;
@@ -117,7 +208,7 @@ async function pageSearch(q) {
 function pageList() {
   const l = getList();
   view.innerHTML = `<h2 class="sec">قائمتي (${l.length})</h2>` +
-    (l.length ? gridHtml(l) : '<div class="empty">قائمتك فارغة — زيد أفلام ومسلسلات بزر «للمشاهدة لاحقًا» 🔖</div>') + attribution;
+    (l.length ? gridHtml(l) : '<div class="empty">قائمتك فارغة — زيد أعمالًا بزر «لاحقًا»</div>') + attribution;
 }
 
 async function pageDetail(type, id) {
@@ -126,7 +217,6 @@ async function pageDetail(type, id) {
   if (d.error) { view.innerHTML = '<div class="empty">تعذّر جلب البيانات</div>'; return; }
   const saved = inList(type, id);
   const rt = d.runtime ? `${d.runtime} د` : '';
-  const provBlock = (title, arr) => (arr && arr.length ? `<h2 class="sec">${title}</h2><div class="provs">${arr.map((p) => `<img title="${esc(p.name)}" src="${img(p.logo, 'w92')}" alt="${esc(p.name)}">`).join('')}</div>` : '');
   view.innerHTML = `
   <section class="dback">
     ${d.backdrop ? `<img src="${img(d.backdrop, 'w780')}" alt="">` : ''}<div class="grad"></div>
@@ -143,8 +233,8 @@ async function pageDetail(type, id) {
   </div>
   <div class="chips">${d.genres.map((g) => `<span class="g">${esc(g)}</span>`).join('')}</div>
   <div class="acts">
-    <button class="btn" id="save">${saved ? '✓ في قائمتي' : '🔖 للمشاهدة لاحقًا'}</button>
-    ${d.trailer ? '<button class="btn ghost" id="tr">▶ الإعلان</button>' : ''}
+    <button class="btn" id="watch">${ICON.play} مشاهدة</button>
+    <button class="btn ghost" id="save">${saved ? ICON.check + ' في قائمتي' : ICON.book + ' لاحقًا'}</button>
   </div>
   ${d.tagline ? `<p class="ov" style="color:var(--mut);font-style:italic">${esc(d.tagline)}</p>` : ''}
   <p class="ov">${esc(d.overview || 'لا يوجد وصف بالعربية لهذا العمل.')}</p>
@@ -153,18 +243,15 @@ async function pageDetail(type, id) {
   ${d.cast.length ? `<h2 class="sec">طاقم التمثيل</h2><div class="people">${d.cast.map((c) => `<a class="person" href="#/person/${c.id}">
       ${c.photo ? `<img loading="lazy" src="${img(c.photo, 'w185')}" alt="">` : '<div class="noimg"></div>'}
       <div class="n">${esc(c.name)}</div><div class="c">${esc(c.character)}</div></a>`).join('')}</div>` : ''}
-  ${d.providers ? provBlock('متوفر للمشاهدة على', d.providers.flatrate) + provBlock('للإيجار', d.providers.rent) + provBlock('للشراء', d.providers.buy) : ''}
   ${d.similar.length ? rowHtml({ title: 'أعمال مشابهة', items: d.similar }) : ''}
   ${attribution}`;
 
   document.getElementById('save').onclick = (e) => {
     const now = toggleList({ id: d.id, type, title: d.title, poster: d.poster, backdrop: d.backdrop, year: (d.date || '').slice(0, 4), rating: d.rating });
-    e.target.textContent = now ? '✓ في قائمتي' : '🔖 للمشاهدة لاحقًا';
+    document.getElementById('save').innerHTML = (now ? ICON.check + ' في قائمتي' : ICON.book + ' لاحقًا');
   };
-  if (d.trailer) document.getElementById('tr').onclick = () => {
-    document.getElementById('trbox').innerHTML = `<div class="trailer"><iframe src="https://www.youtube.com/embed/${d.trailer.key}?rel=0" allowfullscreen allow="accelerometer;autoplay;encrypted-media;picture-in-picture"></iframe></div>`;
-    document.getElementById('trbox').scrollIntoView({ behavior: 'smooth', block: 'center' });
-  };
+  document.getElementById('watch').onclick = () => startWatch(d, type);
+  if (d.trailer) loadFreeBadge(d);
   if (type === 'tv' && d.seasons.length) {
     const sbar = document.getElementById('sbar');
     sbar.innerHTML = d.seasons.map((s, i) => `<div class="chip${i === 0 ? ' on' : ''}" data-s="${s.number}">${esc(s.name)}</div>`).join('');
@@ -219,6 +306,7 @@ function route() {
   if (!parts.length) { setTab('home'); return pageHome(); }
   if (parts[0] === 'browse') { setTab(parts[1] === 'tv' ? 'tv' : 'movie'); return pageBrowse(parts[1] === 'tv' ? 'tv' : 'movie'); }
   if (parts[0] === 'list') { setTab('list'); return pageList(); }
+  if (parts[0] === 'free') { setTab('free'); return pageFree(parts[1]); }
   if (parts[0] === 'search') { setTab(''); return pageSearch(decodeURIComponent(parts[1] || '')); }
   if (parts[0] === 'person') { setTab(''); return pagePerson(parts[1]); }
   if (parts[0] === 'movie' || parts[0] === 'tv') { setTab(''); return pageDetail(parts[0], parts[1]); }

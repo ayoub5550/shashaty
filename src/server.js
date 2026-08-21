@@ -173,15 +173,95 @@ async function details(type, id) {
     })),
     trailer: trailer ? { key: trailer.key, name: trailer.name } : null,
     similar: cards(((d.similar && d.similar.results) || []).concat((d.recommendations && d.recommendations.results) || []), t).slice(0, 20),
-    providers: prov
-      ? {
-          link: prov.link,
-          flatrate: (prov.flatrate || []).map((x) => ({ name: x.provider_name, logo: x.logo_path })),
-          rent: (prov.rent || []).map((x) => ({ name: x.provider_name, logo: x.logo_path })),
-          buy: (prov.buy || []).map((x) => ({ name: x.provider_name, logo: x.logo_path }))
-        }
-      : null
+    providers: null
   };
+}
+
+// ---------- free & legal streaming (Internet Archive, public domain) ----------
+const IA = 'https://archive.org';
+async function iaSearch(q, rows = 12, page = 1, sort = 'downloads desc') {
+  const u = new URL(IA + '/advancedsearch.php');
+  u.searchParams.set('q', q);
+  ['identifier', 'title', 'year', 'downloads', 'description'].forEach((f) => u.searchParams.append('fl[]', f));
+  u.searchParams.append('sort[]', sort);
+  u.searchParams.set('rows', rows);
+  u.searchParams.set('page', page);
+  u.searchParams.set('output', 'json');
+  const key = 'ia:' + u.searchParams.toString();
+  const hit = cacheGet(key);
+  if (hit) return hit;
+  const r = await fetch(u, { headers: { accept: 'application/json' } });
+  if (!r.ok) throw new Error('archive ' + r.status);
+  const j = await r.json();
+  const docs = ((j.response && j.response.docs) || []).map((d) => ({
+    id: d.identifier,
+    title: d.title,
+    year: d.year || '',
+    thumb: IA + '/services/img/' + d.identifier
+  }));
+  cacheSet(key, docs, 6 * 60 * 60 * 1000);
+  return docs;
+}
+
+async function iaStream(identifier) {
+  const key = 'iastream:' + identifier;
+  const hit = cacheGet(key);
+  if (hit !== null && hit !== undefined) return hit;
+  const r = await fetch(IA + '/metadata/' + identifier);
+  if (!r.ok) return null;
+  const m = await r.json();
+  if (!m.files || m.is_dark) { cacheSet(key, null, 60 * 60 * 1000); return null; }
+  const rank = (f) => {
+    const n = (f.name || '').toLowerCase();
+    if (n.endsWith('.mp4')) return (f.format || '').includes('512Kb') ? 3 : 4;
+    if (n.endsWith('.m4v')) return 3;
+    if (n.endsWith('.ogv')) return 2;
+    if (n.endsWith('.webm')) return 2;
+    return 0;
+  };
+  const best = m.files.filter((f) => rank(f) > 0).sort((a, b) => rank(b) - rank(a))[0];
+  if (!best) { cacheSet(key, null, 60 * 60 * 1000); return null; }
+  const server = m.server || 'archive.org';
+  const out = {
+    id: identifier,
+    url: 'https://' + server + (m.dir || '/download/' + identifier) + '/' + encodeURIComponent(best.name),
+    fallback: IA + '/download/' + identifier + '/' + encodeURIComponent(best.name),
+    type: best.name.toLowerCase().endsWith('.ogv') ? 'video/ogg' : best.name.toLowerCase().endsWith('.webm') ? 'video/webm' : 'video/mp4',
+    title: (m.metadata && m.metadata.title) || identifier
+  };
+  cacheSet(key, out, 6 * 60 * 60 * 1000);
+  return out;
+}
+
+function iaQuoted(s) {
+  return String(s).replace(/["\\]/g, ' ').trim();
+}
+
+/** Find a free, legal (public-domain) copy of a title on the Internet Archive. */
+async function findFree(title, year) {
+  if (!title) return null;
+  const t = iaQuoted(title);
+  const queries = [
+    `title:("${t}") AND mediatype:movies AND collection:(feature_films)`,
+    `title:("${t}") AND mediatype:movies AND (collection:(feature_films) OR collection:(classic_tv) OR collection:(moviesandfilms))`
+  ];
+  for (const q of queries) {
+    const docs = await iaSearch(q, 6);
+    for (const d of docs) {
+      if (year && d.year && Math.abs(Number(d.year) - Number(year)) > 1) continue;
+      const s = await iaStream(d.id);
+      if (s) return { ...s, year: d.year, source: 'archive.org' };
+    }
+  }
+  return null;
+}
+
+async function freeCatalog(page, q) {
+  const query = q
+    ? `title:("${iaQuoted(q)}") AND mediatype:movies AND collection:(feature_films)`
+    : 'collection:(feature_films) AND mediatype:movies';
+  const docs = await iaSearch(query, 30, page || 1);
+  return { items: docs, page: Number(page || 1) };
 }
 
 async function season(id, num) {
@@ -280,6 +360,11 @@ const server = http.createServer(async (req, res) => {
       }));
     }
     if (p === '/api/genres') return sendJson(res, await genres(u.searchParams.get('type')));
+    if (p === '/api/free') return sendJson(res, await freeCatalog(u.searchParams.get('page'), u.searchParams.get('q')));
+    if (p === '/api/free/stream') return sendJson(res, (await iaStream(u.searchParams.get('id'))) || { error: 'not playable' });
+    if (p === '/api/watch') {
+      return sendJson(res, (await findFree(u.searchParams.get('title'), u.searchParams.get('year'))) || { free: null });
+    }
     let m;
     if ((m = p.match(/^\/api\/(movie|tv)\/(\d+)$/))) return sendJson(res, await details(m[1], m[2]));
     if ((m = p.match(/^\/api\/tv\/(\d+)\/season\/(\d+)$/))) return sendJson(res, await season(m[1], m[2]));

@@ -108,3 +108,51 @@ p.ov{padding:12px 14px;line-height:1.85;color:#d6dcea;font-size:14px;margin:0}
 .skel{background:linear-gradient(90deg,#151a24,#1d2431,#151a24);background-size:200% 100%;animation:sk 1.2s infinite}
 @keyframes sk{to{background-position:-200% 0}}
 footer.attr{color:#5c667a;font-size:11px;text-align:center;padding:22px 16px 10px;line-height:1.7}
+
+/* ================= v2 : icons, motion, player ================= */
+svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.bottomnav a svg{width:23px;height:23px;transition:transform .25s cubic-bezier(.34,1.56,.64,1)}
+.bottomnav a.on svg{transform:translateY(-2px) scale(1.12)}
+.bottomnav a{position:relative;transition:color .2s}
+.bottomnav a.on::after{content:"";position:absolute;top:0;width:22px;height:3px;border-radius:0 0 4px 4px;background:var(--acc2)}
+.brand b{color:var(--acc2)}
+.searchbox{position:relative;display:flex;align-items:center}
+.searchbox .si{position:absolute;right:12px;width:17px;height:17px;color:var(--mut);pointer-events:none}
+.searchbox input{padding-right:36px;transition:border-color .2s, background .2s}
+
+/* motion */
+@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+#view>*{animation:fadeUp .38s cubic-bezier(.22,.7,.3,1) both}
+#view>*:nth-child(2){animation-delay:.04s}
+#view>*:nth-child(3){animation-delay:.08s}
+#view>*:nth-child(4){animation-delay:.12s}
+#view>*:nth-child(5){animation-delay:.16s}
+.poster{transition:transform .25s cubic-bezier(.34,1.4,.64,1)}
+.poster:active{transform:scale(.95)}
+.poster .ph{box-shadow:0 6px 18px rgba(0,0,0,.45);transition:box-shadow .25s}
+.poster:hover .ph{box-shadow:0 10px 26px rgba(229,9,63,.28)}
+.poster img{transition:transform .5s ease}
+.poster:hover img{transform:scale(1.06)}
+.chip{transition:background .2s,color .2s,transform .18s}
+.chip:active{transform:scale(.94)}
+.btn{transition:transform .18s,filter .2s;box-shadow:0 6px 18px rgba(229,9,63,.28)}
+.btn:active{transform:scale(.96)}
+.btn.ghost{box-shadow:none}
+.btn svg{width:17px;height:17px;vertical-align:-3px;margin-inline-end:5px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* gradient accents */
+.hero .meta h1{background:linear-gradient(90deg,#fff,#ffd9e2);-webkit-background-clip:text;background-clip:text;color:transparent}
+h2.sec::before{background:linear-gradient(180deg,var(--acc2),var(--acc))}
+.badge{backdrop-filter:blur(6px)}
+
+/* in-app player */
+.player{position:fixed;inset:0;z-index:100;background:#000;display:flex;flex-direction:column;animation:fadeIn .25s both}
+.player[hidden]{display:none}
+.pbar{display:flex;align-items:center;gap:12px;padding:10px 14px;color:#fff;font-size:14px;background:#0b0d12}
+.pbar button{background:rgba(255,255,255,.12);border:0;color:#fff;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.pbody{flex:1;display:flex;align-items:center;justify-content:center;background:#000}
+.pbody iframe,.pbody video{width:100%;height:100%;border:0;background:#000}
+.freebar{display:flex;gap:8px;align-items:center;padding:0 14px 4px;color:#7de49b;font-size:12.5px}
+.freebar svg{width:15px;height:15px}
