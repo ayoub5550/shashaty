@@ -430,4 +430,9 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => console.log('shashaty on ' + PORT));
+server.listen(PORT, () => {
+  console.log('shashaty on ' + PORT);
+  // warm slow catalogs so the first visitor never waits
+  classics().catch(() => {});
+  setInterval(() => classics().catch(() => {}), 11 * 60 * 60 * 1000);
+});
