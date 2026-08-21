@@ -1,0 +1,8 @@
+{
+  "name": "shashaty",
+  "version": "1.0.0",
+  "description": "شاشتي — تطبيق عربي لاستكشاف الأفلام والمسلسلات (TMDB)",
+  "main": "src/server.js",
+  "scripts": { "start": "node src/server.js" },
+  "license": "MIT"
+}
