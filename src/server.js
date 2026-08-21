@@ -177,6 +177,19 @@ async function details(type, id) {
   };
 }
 
+// ---------- official YouTube channels (full licensed movies & episodes) ----------
+const yt = require('./sources/youtube');
+
+async function ytCatalog(kind, lang) {
+  const key = `yt:${kind || ''}:${lang || ''}`;
+  const hit = cacheGet(key);
+  if (hit) return hit;
+  const items = await yt.catalog(kind || null, lang || null);
+  const out = { items };
+  if (items.length) cacheSet(key, out, 3 * 60 * 60 * 1000);
+  return out;
+}
+
 // ---------- free & legal streaming (Internet Archive, public domain) ----------
 const IA = 'https://archive.org';
 async function iaSearch(q, rows = 12, page = 1, sort = 'downloads desc') {
@@ -366,6 +379,7 @@ const server = http.createServer(async (req, res) => {
       }));
     }
     if (p === '/api/genres') return sendJson(res, await genres(u.searchParams.get('type')));
+    if (p === '/api/yt') return sendJson(res, await ytCatalog(u.searchParams.get('kind'), u.searchParams.get('lang')));
     if (p === '/api/free') return sendJson(res, await freeCatalog(u.searchParams.get('page'), u.searchParams.get('q')));
     if (p === '/api/free/stream') return sendJson(res, (await iaStream(u.searchParams.get('id'))) || { error: 'not playable' });
     if (p === '/api/watch') {

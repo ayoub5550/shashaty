@@ -102,14 +102,44 @@ async function loadFreeBadge(d) {
   box.innerHTML = d.trailer ? `<div class="freebar" style="color:var(--mut)">${ICON.play} زر «مشاهدة» يشغّل الإعلان الرسمي داخل التطبيق</div>` : '';
 }
 
-/* ---------- free (public domain) library ---------- */
-async function pageFree(page) {
-  page = Number(page || 1);
-  view.innerHTML = `<h2 class="sec">أفلام مجانية بالكامل</h2>
-    <div class="freebar">${ICON.free} كلاسيكيات بالملكية العامة — مشاهدة كاملة وقانونية داخل التطبيق</div>${loader()}`;
+/* ---------- free & legal watching: official YouTube channels + public domain ---------- */
+const FREE_TABS = [
+  { k: 'ar-movie', label: 'أفلام عربية', api: '/api/yt?kind=movie&lang=ar' },
+  { k: 'ar-tv', label: 'مسلسلات عربية', api: '/api/yt?kind=tv&lang=ar' },
+  { k: 'en-movie', label: 'أفلام أجنبية', api: '/api/yt?kind=movie&lang=en' },
+  { k: 'classic', label: 'كلاسيكيات', api: '/api/free' },
+];
+function playYT(title, id) {
+  openPlayer(title, `<iframe src="https://www.youtube.com/embed/${id}?rel=0&autoplay=1&hl=ar" allowfullscreen allow="autoplay;encrypted-media;picture-in-picture"></iframe>`);
+}
+function dur(sec) {
+  const h = Math.floor(sec / 3600), m = Math.round((sec % 3600) / 60);
+  return h ? `${h}س ${m}د` : `${m}د`;
+}
+function freeChips(active) {
+  return `<div class="chips">${FREE_TABS.map((t) => `<a class="chip${t.k === active ? ' on' : ''}" href="#/free/${t.k}">${t.label}</a>`).join('')}</div>`;
+}
+async function pageFree(tab, page) {
+  tab = FREE_TABS.some((t) => t.k === tab) ? tab : 'ar-movie';
+  const t = FREE_TABS.find((x) => x.k === tab);
+  const head = `<h2 class="sec">مشاهدة مجانية بالكامل</h2>${freeChips(tab)}`;
+  view.innerHTML = head + `<div class="freebar">${ICON.free} محتوى كامل ومجاني من مصادر رسمية — يُشغَّل داخل التطبيق</div>${loader()}`;
+  if (tab === 'classic') return pageClassic(head, Number(page || 1));
+  const d = await api(t.api);
+  const items = (d && d.items) || [];
+  view.innerHTML = head +
+    `<div class="freebar">${ICON.free} حلقات وأفلام كاملة من القنوات الرسمية لأصحاب الحقوق (روتانا، MBC، Popcornflix، FilmRise)</div>
+    <div class="wgrid">${items.map((v) => `<a class="wcard" data-yt="${esc(v.id)}" data-t="${esc(v.title)}">
+      <div class="wthumb"><img loading="lazy" src="${esc(v.thumb)}" alt=""><div class="tag">${esc(dur(v.duration))}</div>
+      <span class="wplay">${ICON.play}</span></div>
+      <div class="t">${esc(v.title)}</div><div class="y">${esc(v.channel)}</div></a>`).join('')}</div>
+    ${items.length ? '' : '<p class="ov">تعذّر جلب القائمة الآن، أعد المحاولة بعد قليل.</p>'}${attribution}`;
+  view.querySelectorAll('[data-yt]').forEach((a) => a.onclick = () => playYT(a.dataset.t, a.dataset.yt));
+}
+async function pageClassic(head, page) {
   const d = await api('/api/free?page=' + page);
-  view.innerHTML = `<h2 class="sec">أفلام مجانية بالكامل</h2>
-    <div class="freebar">${ICON.free} كلاسيكيات بالملكية العامة — مشاهدة كاملة وقانونية داخل التطبيق</div>
+  view.innerHTML = head +
+    `<div class="freebar">${ICON.free} كلاسيكيات بالملكية العامة — مشاهدة كاملة وقانونية داخل التطبيق</div>
     <div class="grid">${d.items.map((f) => `<a class="poster" data-free="${esc(f.id)}" data-t="${esc(f.title)}" data-url="${esc(f.url || '')}" data-mime="${esc(f.mime || 'video/mp4')}">
       <div class="ph"><img loading="lazy" src="${esc(f.thumb)}" alt=""><div class="tag">مجاني</div></div>
       <div class="t">${esc(f.title)}</div><div class="y">${esc(f.year || '')}</div></a>`).join('')}</div>
@@ -124,8 +154,8 @@ async function pageFree(page) {
     else { closePlayer(); alert('هذا العنصر غير قابل للتشغيل.'); }
   });
   const nx = document.getElementById('fnext'), pv = document.getElementById('fprev');
-  if (nx) nx.onclick = () => { location.hash = '#/free/' + (page + 1); };
-  if (pv) pv.onclick = () => { location.hash = '#/free/' + (page - 1); };
+  if (nx) nx.onclick = () => { location.hash = '#/free/classic/' + (page + 1); };
+  if (pv) pv.onclick = () => { location.hash = '#/free/classic/' + (page - 1); };
 }
 
 /* ---------- components ---------- */
@@ -307,7 +337,7 @@ function route() {
   if (!parts.length) { setTab('home'); return pageHome(); }
   if (parts[0] === 'browse') { setTab(parts[1] === 'tv' ? 'tv' : 'movie'); return pageBrowse(parts[1] === 'tv' ? 'tv' : 'movie'); }
   if (parts[0] === 'list') { setTab('list'); return pageList(); }
-  if (parts[0] === 'free') { setTab('free'); return pageFree(parts[1]); }
+  if (parts[0] === 'free') { setTab('free'); return pageFree(parts[1], parts[2]); }
   if (parts[0] === 'search') { setTab(''); return pageSearch(decodeURIComponent(parts[1] || '')); }
   if (parts[0] === 'person') { setTab(''); return pagePerson(parts[1]); }
   if (parts[0] === 'movie' || parts[0] === 'tv') { setTab(''); return pageDetail(parts[0], parts[1]); }
