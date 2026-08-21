@@ -110,13 +110,14 @@ async function pageFree(page) {
   const d = await api('/api/free?page=' + page);
   view.innerHTML = `<h2 class="sec">أفلام مجانية بالكامل</h2>
     <div class="freebar">${ICON.free} كلاسيكيات بالملكية العامة — مشاهدة كاملة وقانونية داخل التطبيق</div>
-    <div class="grid">${d.items.map((f) => `<a class="poster" data-free="${esc(f.id)}" data-t="${esc(f.title)}">
+    <div class="grid">${d.items.map((f) => `<a class="poster" data-free="${esc(f.id)}" data-t="${esc(f.title)}" data-url="${esc(f.url || '')}" data-mime="${esc(f.mime || 'video/mp4')}">
       <div class="ph"><img loading="lazy" src="${esc(f.thumb)}" alt=""><div class="tag">مجاني</div></div>
       <div class="t">${esc(f.title)}</div><div class="y">${esc(f.year || '')}</div></a>`).join('')}</div>
     <div class="acts" style="justify-content:center">
       ${page > 1 ? '<button class="btn ghost" id="fprev">السابق</button>' : ''}
       <button class="btn" id="fnext">التالي</button></div>${attribution}`;
   view.querySelectorAll('[data-free]').forEach((a) => a.onclick = async () => {
+    if (a.dataset.url) return playFile(a.dataset.t, a.dataset.url, a.dataset.mime);
     openPlayer(a.dataset.t, '<div class="loader"><div></div></div>');
     const s = await api('/api/free/stream?id=' + encodeURIComponent(a.dataset.free));
     if (s && s.url) playFile(a.dataset.t, s.url, s.type);

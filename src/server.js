@@ -207,7 +207,8 @@ async function iaStream(identifier) {
   const key = 'iastream:' + identifier;
   const hit = cacheGet(key);
   if (hit !== null && hit !== undefined) return hit;
-  const r = await fetch(IA + '/metadata/' + identifier);
+  const r = await fetch(IA + '/metadata/' + identifier, { signal: AbortSignal.timeout(8000) }).catch(() => null);
+  if (!r) return null;
   if (!r.ok) return null;
   const m = await r.json();
   if (!m.files || m.is_dark) { cacheSet(key, null, 60 * 60 * 1000); return null; }
@@ -257,11 +258,16 @@ async function findFree(title, year) {
 }
 
 async function freeCatalog(page, q) {
-  const query = q
+  const CLEAN = ' AND NOT title:(sex OR porn OR nude OR nudist OR erotic OR xxx OR adult)';
+  const query = (q
     ? `title:("${iaQuoted(q)}") AND mediatype:movies AND collection:(feature_films)`
-    : 'collection:(feature_films) AND mediatype:movies';
-  const docs = await iaSearch(query, 30, page || 1);
-  return { items: docs, page: Number(page || 1) };
+    : 'collection:(feature_films) AND mediatype:movies') + CLEAN;
+  const docs = await iaSearch(query, 36, page || 1);
+  const withStream = await Promise.all(docs.map(async (d) => {
+    const s = await iaStream(d.id).catch(() => null);
+    return s ? { ...d, url: s.url, mime: s.type } : null;
+  }));
+  return { items: withStream.filter(Boolean), page: Number(page || 1) };
 }
 
 async function season(id, num) {
