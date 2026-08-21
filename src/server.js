@@ -283,6 +283,38 @@ async function freeCatalog(page, q) {
   return { items: withStream.filter(Boolean), page: Number(page || 1) };
 }
 
+const CLASSICS = require('./data/classics.json');
+
+/** Curated list of famous American public-domain films, resolved to playable copies + TMDB art. */
+async function classics() {
+  const key = 'classics:v1';
+  const hit = cacheGet(key);
+  if (hit) return hit;
+  const items = await Promise.all(CLASSICS.map(async (c) => {
+    const [stream, meta] = await Promise.all([
+      findFree(c.t, c.y).catch(() => null),
+      tmdb('/search/movie', { query: c.t, year: String(c.y) }).catch(() => null)
+    ]);
+    if (!stream) return null;
+    const m = meta && meta.results && meta.results[0];
+    return {
+      id: stream.id,
+      title: c.ar,
+      original_title: c.t,
+      year: c.y,
+      url: stream.url,
+      mime: stream.type,
+      poster: m ? m.poster_path : null,
+      backdrop: m ? m.backdrop_path : null,
+      overview: m ? m.overview || '' : '',
+      rating: m && m.vote_average ? Math.round(m.vote_average * 10) / 10 : null
+    };
+  }));
+  const out = { items: items.filter(Boolean) };
+  cacheSet(key, out, 12 * 60 * 60 * 1000);
+  return out;
+}
+
 async function season(id, num) {
   const d = await tmdb('/tv/' + id + '/season/' + num, {});
   return {
@@ -381,6 +413,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/genres') return sendJson(res, await genres(u.searchParams.get('type')));
     if (p === '/api/yt') return sendJson(res, await ytCatalog(u.searchParams.get('kind'), u.searchParams.get('lang')));
     if (p === '/api/free') return sendJson(res, await freeCatalog(u.searchParams.get('page'), u.searchParams.get('q')));
+    if (p === '/api/classics') return sendJson(res, await classics());
     if (p === '/api/free/stream') return sendJson(res, (await iaStream(u.searchParams.get('id'))) || { error: 'not playable' });
     if (p === '/api/watch') {
       return sendJson(res, (await findFree(u.searchParams.get('title'), u.searchParams.get('year'))) || { free: null });

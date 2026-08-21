@@ -107,7 +107,8 @@ const FREE_TABS = [
   { k: 'ar-movie', label: 'أفلام عربية', api: '/api/yt?kind=movie&lang=ar' },
   { k: 'ar-tv', label: 'مسلسلات عربية', api: '/api/yt?kind=tv&lang=ar' },
   { k: 'en-movie', label: 'أفلام أجنبية', api: '/api/yt?kind=movie&lang=en' },
-  { k: 'classic', label: 'كلاسيكيات', api: '/api/free' },
+  { k: 'classic', label: 'كلاسيكيات أمريكية', api: '/api/classics' },
+  { k: 'archive', label: 'أرشيف مجاني', api: '/api/free' },
 ];
 function playYT(title, id) {
   openPlayer(title, `<iframe src="https://www.youtube.com/embed/${id}?rel=0&autoplay=1&hl=ar" allowfullscreen allow="autoplay;encrypted-media;picture-in-picture"></iframe>`);
@@ -124,7 +125,8 @@ async function pageFree(tab, page) {
   const t = FREE_TABS.find((x) => x.k === tab);
   const head = `<h2 class="sec">مشاهدة مجانية بالكامل</h2>${freeChips(tab)}`;
   view.innerHTML = head + `<div class="freebar">${ICON.free} محتوى كامل ومجاني من مصادر رسمية — يُشغَّل داخل التطبيق</div>${loader()}`;
-  if (tab === 'classic') return pageClassic(head, Number(page || 1));
+  if (tab === 'classic') return pageClassics(head);
+  if (tab === 'archive') return pageClassic(head, Number(page || 1));
   const d = await api(t.api);
   const items = (d && d.items) || [];
   view.innerHTML = head +
@@ -135,6 +137,18 @@ async function pageFree(tab, page) {
       <div class="t">${esc(v.title)}</div><div class="y">${esc(v.channel)}</div></a>`).join('')}</div>
     ${items.length ? '' : '<p class="ov">تعذّر جلب القائمة الآن، أعد المحاولة بعد قليل.</p>'}${attribution}`;
   view.querySelectorAll('[data-yt]').forEach((a) => a.onclick = () => playYT(a.dataset.t, a.dataset.yt));
+}
+async function pageClassics(head) {
+  const d = await api('/api/classics');
+  const items = (d && d.items) || [];
+  view.innerHTML = head +
+    `<div class="freebar">${ICON.free} أفلام أمريكية مشهورة انتهت حقوق نشرها — مشاهدة كاملة وقانونية داخل التطبيق</div>
+    <div class="grid">${items.map((f) => `<a class="poster" data-url="${esc(f.url)}" data-mime="${esc(f.mime || 'video/mp4')}" data-t="${esc(f.title)}">
+      <div class="ph">${f.poster ? `<img loading="lazy" src="${img(f.poster, 'w342')}" alt="">` : ''}
+      ${f.rating ? `<div class="badge">★ ${f.rating}</div>` : ''}<div class="tag">مجاني</div><span class="wplay">${ICON.play}</span></div>
+      <div class="t">${esc(f.title)}</div><div class="y">${esc(f.original_title)} · ${esc(f.year)}</div></a>`).join('')}</div>
+    ${items.length ? '' : '<p class="ov">تعذّر جلب القائمة الآن، أعد المحاولة بعد قليل.</p>'}${attribution}`;
+  view.querySelectorAll('[data-url]').forEach((a) => a.onclick = () => playFile(a.dataset.t, a.dataset.url, a.dataset.mime));
 }
 async function pageClassic(head, page) {
   const d = await api('/api/free?page=' + page);
@@ -154,8 +168,8 @@ async function pageClassic(head, page) {
     else { closePlayer(); alert('هذا العنصر غير قابل للتشغيل.'); }
   });
   const nx = document.getElementById('fnext'), pv = document.getElementById('fprev');
-  if (nx) nx.onclick = () => { location.hash = '#/free/classic/' + (page + 1); };
-  if (pv) pv.onclick = () => { location.hash = '#/free/classic/' + (page - 1); };
+  if (nx) nx.onclick = () => { location.hash = '#/free/archive/' + (page + 1); };
+  if (pv) pv.onclick = () => { location.hash = '#/free/archive/' + (page - 1); };
 }
 
 /* ---------- components ---------- */
